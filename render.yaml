@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: musikquiz
+    runtime: python
+    buildCommand: ""
+    startCommand: python3 server.py
+    envVars:
+      - key: ADMIN_PIN
+        value: "1234"

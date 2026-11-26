@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Musikquiz – Svarsformulär</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">🎵</div>
+        <span>Musikquiz</span>
+      </div>
+      <a href="/admin" class="btn btn-secondary btn-sm">Admin</a>
+    </header>
+
+    <div id="loading-view" class="card">
+      <p class="muted">Laddar quiz...</p>
+    </div>
+
+    <div id="error-view" class="card hidden">
+      <h2>Hoppsan!</h2>
+      <p id="error-message" class="muted"></p>
+    </div>
+
+    <!-- Steg 1: Ange användarnamn -->
+    <section id="username-view" class="card hidden">
+      <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+        <span id="quiz-status-badge" class="badge active">Öppet för svar</span>
+        <span id="question-count-badge" class="badge"></span>
+      </div>
+      <h1 id="quiz-title"></h1>
+      <p id="quiz-description" class="muted"></p>
+
+      <form id="start-form" style="margin-top: 22px;">
+        <label for="username-input">Ditt användarnamn eller lagnamn</label>
+        <input
+          id="username-input"
+          type="text"
+          placeholder="T.ex. Disco-Kungen eller Lag Gul"
+          maxlength="60"
+          required
+          autocomplete="nickname"
+        />
+        <div id="start-error" class="alert alert-error hidden" style="margin-top: 12px;"></div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 14px;">
+          Starta quizet →
+        </button>
+      </form>
+    </section>
+
+    <!-- Steg 2: Svarsformulär -->
+    <section id="quiz-view" class="hidden">
+      <div class="card" style="padding: 16px 20px;">
+        <div class="row" style="justify-content: space-between;">
+          <div>
+            <strong id="active-quiz-title"></strong>
+            <div class="small muted">Spelar som: <strong id="display-username" style="color: var(--text);"></strong></div>
+          </div>
+          <span id="answered-counter" class="badge">0 / 0 besvarade</span>
+        </div>
+        <div class="progress-wrap" style="margin-top: 12px; margin-bottom: 0;">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </div>
+
+      <form id="quiz-form">
+        <div id="questions-container"></div>
+        <div id="submit-error" class="alert alert-error hidden"></div>
+        <button id="submit-btn" type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">
+          Skicka in mina svar ✓
+        </button>
+      </form>
+    </section>
+
+    <!-- Steg 3: Bekräftelse -->
+    <section id="done-view" class="card hidden" style="text-align: center; padding: 36px 24px;">
+      <div style="font-size: 3rem; margin-bottom: 10px;">🎉</div>
+      <h1>Svar inskickade!</h1>
+      <p class="muted" id="done-message"></p>
+      <button id="new-attempt-btn" class="btn btn-secondary" style="margin-top: 16px;">
+        Svara med ett annat namn
+      </button>
+    </section>
+  </div>
+
+  <script src="/quiz.js"></script>
+</body>
+</html>

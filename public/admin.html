@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin – Musikquiz</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="container wide">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-icon">🎛️</div>
+        <span>Musikquiz Admin</span>
+      </div>
+      <div class="row">
+        <a href="/" class="btn btn-secondary btn-sm">Öppna formulär</a>
+        <button id="logout-btn" class="btn btn-secondary btn-sm hidden">Logga ut</button>
+      </div>
+    </header>
+
+    <!-- Inloggning -->
+    <section id="login-view" class="card" style="max-width: 420px; margin: 40px auto;">
+      <h1>Admin-inloggning</h1>
+      <p class="muted small">Ange admin-PIN för att hantera frågor, länkar och svar. (Standard: <code>1234</code>)</p>
+      <form id="login-form">
+        <label for="pin-input">PIN-kod</label>
+        <input id="pin-input" type="password" placeholder="••••" required />
+        <div id="login-error" class="alert alert-error hidden" style="margin-top: 12px;"></div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 14px;">
+          Logga in
+        </button>
+      </form>
+    </section>
+
+    <!-- Admin Dashboard -->
+    <section id="dashboard-view" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content: space-between; margin-bottom: 14px;">
+          <div>
+            <h2 style="margin-bottom: 2px;">Dina Quiz</h2>
+            <p class="muted small" style="margin: 0;">Välj ett quiz att redigera eller skapa ett nytt.</p>
+          </div>
+          <button id="toggle-new-quiz-btn" class="btn btn-primary btn-sm">+ Nytt quiz</button>
+        </div>
+
+        <form id="new-quiz-form" class="hidden" style="border-top: 1px solid var(--border); padding-top: 16px; margin-bottom: 16px;">
+          <div class="grid-2">
+            <div>
+              <label for="new-quiz-title">Titel</label>
+              <input id="new-quiz-title" type="text" placeholder="T.ex. Lördagens 90-talsquiz" required />
+            </div>
+            <div>
+              <label for="new-quiz-slug">Egen webblänk (valfritt)</label>
+              <input id="new-quiz-slug" type="text" placeholder="t.ex. 90-talsquiz" />
+            </div>
+          </div>
+          <div style="margin-top: 12px;">
+            <label for="new-quiz-desc">Beskrivning till deltagarna</label>
+            <input id="new-quiz-desc" type="text" placeholder="Skriv ditt lagnamn och gissa artist + låt!" />
+          </div>
+          <div class="row" style="margin-top: 12px;">
+            <button type="submit" class="btn btn-primary btn-sm">Skapa quiz</button>
+            <button type="button" id="cancel-new-quiz-btn" class="btn btn-secondary btn-sm">Avbryt</button>
+          </div>
+        </form>
+
+        <div class="row">
+          <select id="quiz-select" style="flex: 1; min-width: 220px;"></select>
+          <button id="toggle-active-btn" class="btn btn-secondary btn-sm"></button>
+          <button id="delete-quiz-btn" class="btn btn-danger btn-sm">Ta bort quiz</button>
+        </div>
+
+        <div id="share-box" class="copy-box" style="margin-top: 14px;">
+          <span class="small muted">Dela länk:</span>
+          <code id="share-url"></code>
+          <button id="copy-link-btn" class="btn btn-secondary btn-sm" type="button">Kopiera</button>
+          <a id="open-link-btn" href="#" target="_blank" class="btn btn-secondary btn-sm">Öppna ↗</a>
+        </div>
+      </div>
+
+      <!-- Flikar -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="questions">Frågor (<span id="tab-q-count">0</span>)</button>
+        <button class="tab-btn" data-tab="submissions">Inskickade svar & Rättning (<span id="tab-s-count">0</span>)</button>
+        <button class="tab-btn" data-tab="leaderboard">Topplista</button>
+      </div>
+
+      <!-- Flik: Frågor -->
+      <div id="tab-questions">
+        <div class="card">
+          <h3>Lägg till ny fråga</h3>
+          <form id="add-question-form">
+            <div class="grid-2">
+              <div>
+                <label for="q-prompt">Fråga / Låtnummer</label>
+                <input id="q-prompt" type="text" placeholder="T.ex. Låt 4: Vilken artist och låt?" required />
+              </div>
+              <div>
+                <label for="q-type">Svarstyp</label>
+                <select id="q-type">
+                  <option value="artist_song">Artist + Låt (två fält)</option>
+                  <option value="text">Fritext (ett fält)</option>
+                  <option value="multiple_choice">Flerval (radioknappar)</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="q-options-wrap" class="hidden" style="margin-top: 12px;">
+              <label for="q-options">Svarsalternativ (ett per rad)</label>
+              <textarea id="q-options" placeholder="1979&#10;1984&#10;1991&#10;1996"></textarea>
+            </div>
+
+            <div class="grid-2" style="margin-top: 12px;">
+              <div>
+                <label for="q-correct">Facit / Rätt svar (valfritt)</label>
+                <input id="q-correct" type="text" placeholder="T.ex. Roxette - The Look" />
+              </div>
+              <div>
+                <label for="q-points">Maxpoäng</label>
+                <input id="q-points" type="number" min="1" max="20" value="2" />
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 14px;">+ Lägg till fråga</button>
+          </form>
+        </div>
+
+        <div id="questions-list"></div>
+      </div>
+
+      <!-- Flik: Inskickade svar -->
+      <div id="tab-submissions" class="hidden">
+        <div class="row" style="justify-content: space-between; margin-bottom: 14px;">
+          <button id="refresh-subs-btn" class="btn btn-secondary btn-sm">↻ Uppdatera svar</button>
+          <button id="export-csv-btn" class="btn btn-secondary btn-sm">⬇ Ladda ner CSV</button>
+        </div>
+        <div id="submissions-list"></div>
+      </div>
+
+      <!-- Flik: Topplista -->
+      <div id="tab-leaderboard" class="hidden">
+        <div class="card table-wrap">
+          <h3>Topplista</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Användarnamn</th>
+                <th>Poäng</th>
+                <th>Inskickad</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/admin.js"></script>
+</body>
+</html>
