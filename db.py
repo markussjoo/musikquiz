@@ -147,13 +147,24 @@ def _row_to_quiz(row: sqlite3.Row) -> Dict[str, Any]:
 
 
 def _row_to_question(row: sqlite3.Row, include_answer: bool = False) -> Dict[str, Any]:
+    raw_options = json.loads(row["options_json"] or "[]")
+    q_type = row["question_type"]
+    if q_type == "multi_fields" and not include_answer:
+        options = [
+            {k: v for k, v in f.items() if k != "correct"}
+            for f in raw_options
+            if isinstance(f, dict)
+        ]
+    else:
+        options = raw_options
+
     data: Dict[str, Any] = {
         "id": row["id"],
         "quiz_id": row["quiz_id"],
         "order_index": row["order_index"],
         "prompt": row["prompt"],
-        "question_type": row["question_type"],
-        "options": json.loads(row["options_json"] or "[]"),
+        "question_type": q_type,
+        "options": options,
         "points": row["points"],
     }
     if include_answer:
@@ -257,7 +268,7 @@ def add_question(
     quiz_id: int,
     prompt: str,
     question_type: str = "artist_song",
-    options: Optional[List[str]] = None,
+    options: Optional[List[Any]] = None,
     correct_answer: str = "",
     points: int = 1,
 ) -> Optional[Dict[str, Any]]:
@@ -268,6 +279,21 @@ def add_question(
             "SELECT COALESCE(MAX(order_index), 0) FROM questions WHERE quiz_id = ?",
             (quiz_id,),
         ).fetchone()[0]
+
+        clean_options = options or []
+        total_points = max(1, int(points))
+        derived_correct = correct_answer.strip()
+        if question_type == "multi_fields" and isinstance(clean_options, list):
+            clean_options = clean_options[:5]
+            total_points = sum(max(1, int(f.get("points", 1))) for f in clean_options) or 1
+            if not derived_correct:
+                facit_parts = [
+                    f"{f.get('label', '')}: {f.get('correct', '').strip()}"
+                    for f in clean_options
+                    if str(f.get("correct", "")).strip()
+                ]
+                derived_correct = " | ".join(facit_parts)
+
         cur = conn.execute(
             """
             INSERT INTO questions (quiz_id, order_index, prompt, question_type, options_json, correct_answer, points)
@@ -278,9 +304,9 @@ def add_question(
                 max_order + 1,
                 prompt.strip(),
                 question_type,
-                json.dumps(options or []),
-                correct_answer.strip(),
-                max(1, int(points)),
+                json.dumps(clean_options, ensure_ascii=False),
+                derived_correct,
+                total_points,
             ),
         )
         row = conn.execute("SELECT * FROM questions WHERE id = ?", (cur.lastrowid,)).fetchone()
@@ -326,8 +352,45 @@ def delete_question(question_id: int) -> bool:
         return cur.rowcount > 0
 
 
-def _auto_grade(answer_text: str, correct_answer: str, max_points: int) -> tuple[Optional[int], int]:
+def _auto_grade(
+    answer_text: str,
+    correct_answer: str,
+    max_points: int,
+    question_type: str = "text",
+    options_json: str = "[]",
+) -> tuple[Optional[int], int]:
     """Simple exact/case-insensitive match when correct_answer is provided."""
+    if question_type == "multi_fields":
+        try:
+            fields_cfg = json.loads(options_json or "[]")
+            ans_obj = json.loads(answer_text or "{}")
+            ans_fields = ans_obj.get("fields", {}) if isinstance(ans_obj, dict) else {}
+        except json.JSONDecodeError:
+            return (None, 0)
+
+        has_any_facit = any(str(f.get("correct", "")).strip() for f in fields_cfg)
+        if not has_any_facit:
+            return (None, 0)
+
+        awarded = 0
+        all_checked_correct = True
+        any_answered = False
+        for f in fields_cfg:
+            key = f.get("key", "")
+            user_val = re.sub(r"\s+", " ", str(ans_fields.get(key, "")).strip().lower())
+            corr_val = re.sub(r"\s+", " ", str(f.get("correct", "")).strip().lower())
+            pts = max(1, int(f.get("points", 1)))
+            if user_val:
+                any_answered = True
+            if corr_val:
+                if user_val == corr_val:
+                    awarded += pts
+                else:
+                    all_checked_correct = False
+        if not any_answered:
+            return (0, 0)
+        return (1 if all_checked_correct else None, awarded)
+
     if not correct_answer.strip():
         return (None, 0)
     norm_ans = re.sub(r"\s+", " ", answer_text.strip().lower())
@@ -374,7 +437,11 @@ def submit_quiz_answers(
         for q_id, q_row in questions_by_id.items():
             ans_text = answer_map.get(q_id, "")
             is_correct, pts = _auto_grade(
-                ans_text, q_row["correct_answer"], q_row["points"]
+                ans_text,
+                q_row["correct_answer"],
+                q_row["points"],
+                q_row["question_type"],
+                q_row["options_json"],
             )
             conn.execute(
                 """
@@ -401,7 +468,8 @@ def list_submissions(quiz_id: int) -> List[Dict[str, Any]]:
         for sub in subs:
             ans_rows = conn.execute(
                 """
-                SELECT a.*, q.prompt, q.correct_answer, q.points AS max_points, q.order_index
+                SELECT a.*, q.prompt, q.correct_answer, q.points AS max_points, q.order_index,
+                       q.question_type, q.options_json
                 FROM answers a
                 JOIN questions q ON q.id = a.question_id
                 WHERE a.submission_id = ?
@@ -415,6 +483,20 @@ def list_submissions(quiz_id: int) -> List[Dict[str, Any]]:
             for a in ans_rows:
                 total_points += a["awarded_points"]
                 max_total += a["max_points"]
+                display_text = a["answer_text"]
+                if a["question_type"] == "multi_fields":
+                    try:
+                        cfg = json.loads(a["options_json"] or "[]")
+                        obj = json.loads(a["answer_text"] or "{}")
+                        fields_map = obj.get("fields", {}) if isinstance(obj, dict) else {}
+                        parts = [
+                            f"{f.get('label', f.get('key', ''))}: {fields_map.get(f.get('key', ''), '').strip() or '—'}"
+                            for f in cfg
+                        ]
+                        display_text = " | ".join(parts)
+                    except (json.JSONDecodeError, AttributeError):
+                        pass
+
                 ans_list.append(
                     {
                         "id": a["id"],
@@ -422,7 +504,7 @@ def list_submissions(quiz_id: int) -> List[Dict[str, Any]]:
                         "prompt": a["prompt"],
                         "correct_answer": a["correct_answer"],
                         "max_points": a["max_points"],
-                        "answer_text": a["answer_text"],
+                        "answer_text": display_text,
                         "is_correct": (
                             None if a["is_correct"] is None else bool(a["is_correct"])
                         ),

@@ -49,6 +49,12 @@
       if (q.question_type === "multiple_choice") {
         const checked = quizForm.querySelector(`input[name="q_${q.id}"]:checked`);
         if (checked && checked.value.trim()) answered++;
+      } else if (q.question_type === "multi_fields" && Array.isArray(q.options)) {
+        const anyFilled = q.options.some((f) => {
+          const val = quizForm.querySelector(`input[name="q_${q.id}_${f.key}"]`)?.value.trim() || "";
+          return val.length > 0;
+        });
+        if (anyFilled) answered++;
       } else if (q.question_type === "artist_song") {
         const artist = quizForm.querySelector(`input[name="q_${q.id}_artist"]`)?.value.trim() || "";
         const song = quizForm.querySelector(`input[name="q_${q.id}_song"]`)?.value.trim() || "";
@@ -82,6 +88,32 @@
           `
           )
           .join("");
+      } else if (q.question_type === "multi_fields" && Array.isArray(q.options) && q.options.length > 0) {
+        const fieldsHtml = q.options
+          .map((f) => {
+            const isYear = f.key === "year";
+            const placeholder = isYear
+              ? "T.ex. 1984"
+              : f.key === "artist"
+              ? "T.ex. ABBA"
+              : f.key === "title"
+              ? "T.ex. Dancing Queen"
+              : "Skriv ditt svar...";
+            return `
+              <div>
+                <label class="small muted" for="q_${q.id}_${escapeHtml(f.key)}">${escapeHtml(f.label)} (${f.points || 1} p)</label>
+                <input
+                  id="q_${q.id}_${escapeHtml(f.key)}"
+                  name="q_${q.id}_${escapeHtml(f.key)}"
+                  type="text"
+                  ${isYear ? 'inputmode="numeric" maxlength="10"' : ""}
+                  placeholder="${placeholder}"
+                />
+              </div>
+            `;
+          })
+          .join("");
+        inputHtml = `<div class="grid-2">${fieldsHtml}</div>`;
       } else if (q.question_type === "artist_song") {
         inputHtml = `
           <div class="grid-2">
@@ -183,6 +215,12 @@
       if (q.question_type === "multiple_choice") {
         const checked = quizForm.querySelector(`input[name="q_${q.id}"]:checked`);
         answerText = checked ? checked.value : "";
+      } else if (q.question_type === "multi_fields" && Array.isArray(q.options)) {
+        const fieldsObj = {};
+        q.options.forEach((f) => {
+          fieldsObj[f.key] = quizForm.querySelector(`input[name="q_${q.id}_${f.key}"]`)?.value.trim() || "";
+        });
+        answerText = JSON.stringify({ fields: fieldsObj });
       } else if (q.question_type === "artist_song") {
         const artist = quizForm.querySelector(`input[name="q_${q.id}_artist"]`)?.value.trim() || "";
         const song = quizForm.querySelector(`input[name="q_${q.id}_song"]`)?.value.trim() || "";

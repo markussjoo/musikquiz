@@ -110,6 +110,7 @@
     }
 
     const typeLabels = {
+      multi_fields: "Musikfråga (delfält)",
       artist_song: "Artist + Låt",
       text: "Fritext",
       multiple_choice: "Flerval",
@@ -118,12 +119,18 @@
     currentQuestions.forEach((q, idx) => {
       const div = document.createElement("div");
       div.className = "card";
+      let optsText = "";
+      if (q.question_type === "multi_fields" && Array.isArray(q.options)) {
+        optsText = q.options.map((f) => `${f.label} (${f.points || 1}p)`).join(" · ");
+      } else if (Array.isArray(q.options) && q.options.length) {
+        optsText = q.options.map(escapeHtml).join(", ");
+      }
       div.innerHTML = `
         <div class="row" style="justify-content: space-between; align-items: flex-start;">
           <div>
             <div class="question-num">Fråga ${idx + 1} · ${typeLabels[q.question_type] || q.question_type} · ${q.points} p</div>
             <h3 style="margin: 4px 0 6px;">${escapeHtml(q.prompt)}</h3>
-            ${q.options && q.options.length ? `<div class="small muted">Alternativ: ${q.options.map(escapeHtml).join(", ")}</div>` : ""}
+            ${optsText ? `<div class="small muted">Fält/Alternativ: ${escapeHtml(optsText)}</div>` : ""}
             <div class="small muted">Facit: <strong style="color: var(--success);">${q.correct_answer ? escapeHtml(q.correct_answer) : "Inget angivet"}</strong></div>
           </div>
           <button class="btn btn-danger btn-sm delete-q-btn" data-id="${q.id}">Ta bort</button>
@@ -333,31 +340,92 @@
     setTimeout(() => (btn.textContent = "Kopiera"), 1500);
   });
 
-  qTypeSelect.addEventListener("change", () => {
-    qOptionsWrap.classList.toggle("hidden", qTypeSelect.value !== "multiple_choice");
+  const qMultifieldsWrap = document.getElementById("q-multifields-wrap");
+  const qSingleCorrectWrap = document.getElementById("q-single-correct-wrap");
+
+  function syncQuestionTypeUI() {
+    const t = qTypeSelect.value;
+    qMultifieldsWrap.classList.toggle("hidden", t !== "multi_fields");
+    qOptionsWrap.classList.toggle("hidden", t !== "multiple_choice");
+    qSingleCorrectWrap.classList.toggle("hidden", t === "multi_fields");
+  }
+
+  qTypeSelect.addEventListener("change", syncQuestionTypeUI);
+  syncQuestionTypeUI();
+
+  // Auto-check custom question checkbox when typing a label
+  ["custom1", "custom2"].forEach((k) => {
+    const lbl = document.getElementById(`mf-${k}-label`);
+    const chk = document.getElementById(`mf-${k}-on`);
+    lbl.addEventListener("input", () => {
+      if (lbl.value.trim()) chk.checked = true;
+    });
   });
 
   document.getElementById("add-question-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!selectedQuizId) return;
-    const options = document
-      .getElementById("q-options")
-      .value.split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean);
+
+    const qType = qTypeSelect.value;
+    let options = [];
+    let correctAnswer = document.getElementById("q-correct").value;
+    let points = Number(document.getElementById("q-points").value) || 1;
+
+    if (qType === "multi_fields") {
+      const fixedDefs = [
+        { key: "artist", label: "Artist" },
+        { key: "title", label: "Titel" },
+        { key: "year", label: "Årtal" },
+      ];
+      fixedDefs.forEach((d) => {
+        if (document.getElementById(`mf-${d.key}-on`).checked) {
+          options.push({
+            key: d.key,
+            label: d.label,
+            correct: document.getElementById(`mf-${d.key}-correct`).value.trim(),
+            points: Math.max(1, Number(document.getElementById(`mf-${d.key}-pts`).value) || 1),
+          });
+        }
+      });
+      ["custom1", "custom2"].forEach((ck) => {
+        if (document.getElementById(`mf-${ck}-on`).checked) {
+          const lbl = document.getElementById(`mf-${ck}-label`).value.trim();
+          if (!lbl) return;
+          options.push({
+            key: ck,
+            label: lbl,
+            correct: document.getElementById(`mf-${ck}-correct`).value.trim(),
+            points: Math.max(1, Number(document.getElementById(`mf-${ck}-pts`).value) || 1),
+          });
+        }
+      });
+      if (options.length === 0) {
+        alert("Välj minst ett svarsalternativ (t.ex. Artist, Titel, Årtal eller en egen fråga).");
+        return;
+      }
+      correctAnswer = "";
+      points = options.reduce((sum, f) => sum + f.points, 0);
+    } else if (qType === "multiple_choice") {
+      options = document
+        .getElementById("q-options")
+        .value.split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
 
     await api(`/api/admin/quizzes/${selectedQuizId}/questions`, {
       method: "POST",
       body: JSON.stringify({
         prompt: document.getElementById("q-prompt").value,
-        question_type: qTypeSelect.value,
+        question_type: qType,
         options,
-        correct_answer: document.getElementById("q-correct").value,
-        points: Number(document.getElementById("q-points").value) || 1,
+        correct_answer: correctAnswer,
+        points,
       }),
     });
     e.target.reset();
-    qOptionsWrap.classList.add("hidden");
+    qTypeSelect.value = qType;
+    syncQuestionTypeUI();
     await loadQuestions();
   });
 
