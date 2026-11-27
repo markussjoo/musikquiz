@@ -103,7 +103,7 @@
       <!-- Flik: Frågor -->
       <div id="tab-questions">
         <div class="card">
-          <h3>Lägg till ny fråga</h3>
+          <h3 id="question-form-title">Lägg till ny fråga</h3>
           <form id="add-question-form">
             <div class="grid-2">
               <div>
@@ -191,7 +191,10 @@
               </div>
             </div>
 
-            <button type="submit" class="btn btn-primary" style="margin-top: 14px;">+ Lägg till fråga</button>
+            <div class="row" style="margin-top: 14px;">
+              <button id="question-submit-btn" type="submit" class="btn btn-primary">+ Lägg till fråga</button>
+              <button id="cancel-edit-btn" type="button" class="btn btn-secondary hidden">Avbryt redigering</button>
+            </div>
           </form>
         </div>
 

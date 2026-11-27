@@ -264,6 +264,29 @@ def list_questions(quiz_id: int) -> List[Dict[str, Any]]:
         return [_row_to_question(r, include_answer=True) for r in rows]
 
 
+def _prepare_question_payload(
+    question_type: str,
+    options: Optional[List[Any]],
+    correct_answer: str,
+    points: int,
+) -> tuple[List[Any], str, int]:
+    """Normalize options, derived facit, and point total for a question."""
+    clean_options = options or []
+    total_points = max(1, int(points))
+    derived_correct = correct_answer.strip()
+    if question_type == "multi_fields" and isinstance(clean_options, list):
+        clean_options = clean_options[:5]
+        total_points = sum(max(1, int(f.get("points", 1))) for f in clean_options) or 1
+        if not derived_correct:
+            facit_parts = [
+                f"{f.get('label', '')}: {f.get('correct', '').strip()}"
+                for f in clean_options
+                if str(f.get("correct", "")).strip()
+            ]
+            derived_correct = " | ".join(facit_parts)
+    return clean_options, derived_correct, total_points
+
+
 def add_question(
     quiz_id: int,
     prompt: str,
@@ -280,19 +303,9 @@ def add_question(
             (quiz_id,),
         ).fetchone()[0]
 
-        clean_options = options or []
-        total_points = max(1, int(points))
-        derived_correct = correct_answer.strip()
-        if question_type == "multi_fields" and isinstance(clean_options, list):
-            clean_options = clean_options[:5]
-            total_points = sum(max(1, int(f.get("points", 1))) for f in clean_options) or 1
-            if not derived_correct:
-                facit_parts = [
-                    f"{f.get('label', '')}: {f.get('correct', '').strip()}"
-                    for f in clean_options
-                    if str(f.get("correct", "")).strip()
-                ]
-                derived_correct = " | ".join(facit_parts)
+        clean_options, derived_correct, total_points = _prepare_question_payload(
+            question_type, options, correct_answer, points
+        )
 
         cur = conn.execute(
             """
@@ -317,7 +330,7 @@ def update_question(
     question_id: int,
     prompt: Optional[str] = None,
     question_type: Optional[str] = None,
-    options: Optional[List[str]] = None,
+    options: Optional[List[Any]] = None,
     correct_answer: Optional[str] = None,
     points: Optional[int] = None,
     order_index: Optional[int] = None,
@@ -326,6 +339,19 @@ def update_question(
         row = conn.execute("SELECT * FROM questions WHERE id = ?", (question_id,)).fetchone()
         if not row:
             return None
+
+        new_type = question_type if question_type is not None else row["question_type"]
+        raw_opts = options if options is not None else json.loads(row["options_json"] or "[]")
+        raw_corr = (
+            correct_answer
+            if correct_answer is not None
+            else ("" if new_type == "multi_fields" and options is not None else row["correct_answer"])
+        )
+        raw_pts = points if points is not None else row["points"]
+        clean_options, derived_correct, total_points = _prepare_question_payload(
+            new_type, raw_opts, raw_corr, raw_pts
+        )
+
         conn.execute(
             """
             UPDATE questions
@@ -334,10 +360,10 @@ def update_question(
             """,
             (
                 prompt.strip() if prompt is not None else row["prompt"],
-                question_type if question_type is not None else row["question_type"],
-                json.dumps(options) if options is not None else row["options_json"],
-                correct_answer.strip() if correct_answer is not None else row["correct_answer"],
-                max(1, int(points)) if points is not None else row["points"],
+                new_type,
+                json.dumps(clean_options, ensure_ascii=False),
+                derived_correct,
+                total_points,
                 int(order_index) if order_index is not None else row["order_index"],
                 question_id,
             ),

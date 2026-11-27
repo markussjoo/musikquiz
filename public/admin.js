@@ -5,6 +5,7 @@
   let selectedQuizId = null;
   let currentQuestions = [];
   let currentSubmissions = [];
+  let editingQuestionId = null;
 
   const loginView = document.getElementById("login-view");
   const dashboardView = document.getElementById("dashboard-view");
@@ -140,16 +141,27 @@
             ${optsText ? `<div class="small muted">Fält/Alternativ: ${escapeHtml(optsText)}</div>` : ""}
             <div class="small muted">Facit: <strong style="color: var(--success);">${q.correct_answer ? escapeHtml(q.correct_answer) : "Inget angivet"}</strong></div>
           </div>
-          <button class="btn btn-danger btn-sm delete-q-btn" data-id="${q.id}">Ta bort</button>
+          <div class="row">
+            <button class="btn btn-secondary btn-sm edit-q-btn" data-id="${q.id}">✏️ Redigera</button>
+            <button class="btn btn-danger btn-sm delete-q-btn" data-id="${q.id}">Ta bort</button>
+          </div>
         </div>
       `;
       container.appendChild(div);
+    });
+
+    container.querySelectorAll(".edit-q-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const q = currentQuestions.find((item) => item.id === Number(btn.dataset.id));
+        if (q) startEditingQuestion(q);
+      });
     });
 
     container.querySelectorAll(".delete-q-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         if (!confirm("Ta bort den här frågan?")) return;
         await api(`/api/admin/questions/${btn.dataset.id}`, { method: "DELETE" });
+        if (editingQuestionId === Number(btn.dataset.id)) cancelEditingQuestion();
         await loadQuestions();
       });
     });
@@ -377,6 +389,66 @@
     });
   });
 
+  function cancelEditingQuestion() {
+    editingQuestionId = null;
+    document.getElementById("add-question-form").reset();
+    document.getElementById("question-form-title").textContent = "Lägg till ny fråga";
+    document.getElementById("question-submit-btn").textContent = "+ Lägg till fråga";
+    document.getElementById("cancel-edit-btn").classList.add("hidden");
+    qTypeSelect.value = "multi_fields";
+    syncQuestionTypeUI();
+  }
+
+  function startEditingQuestion(q) {
+    editingQuestionId = q.id;
+    document.getElementById("question-form-title").textContent = "Redigera fråga";
+    document.getElementById("question-submit-btn").textContent = "Spara ändringar ✓";
+    document.getElementById("cancel-edit-btn").classList.remove("hidden");
+
+    document.getElementById("q-prompt").value = q.prompt || "";
+    qTypeSelect.value = q.question_type || "text";
+    syncQuestionTypeUI();
+
+    // Reset all multi-fields first
+    ["artist", "title", "year"].forEach((k) => {
+      document.getElementById(`mf-${k}-on`).checked = false;
+      document.getElementById(`mf-${k}-correct`).value = "";
+      document.getElementById(`mf-${k}-pts`).value = 1;
+    });
+    ["custom1", "custom2"].forEach((k) => {
+      document.getElementById(`mf-${k}-on`).checked = false;
+      document.getElementById(`mf-${k}-label`).value = "";
+      document.getElementById(`mf-${k}-correct`).value = "";
+      document.getElementById(`mf-${k}-pts`).value = 1;
+    });
+
+    if (q.question_type === "multi_fields" && Array.isArray(q.options)) {
+      q.options.forEach((f) => {
+        if (["artist", "title", "year"].includes(f.key)) {
+          document.getElementById(`mf-${f.key}-on`).checked = true;
+          document.getElementById(`mf-${f.key}-correct`).value = f.correct || "";
+          document.getElementById(`mf-${f.key}-pts`).value = f.points || 1;
+        } else if (["custom1", "custom2"].includes(f.key)) {
+          document.getElementById(`mf-${f.key}-on`).checked = true;
+          document.getElementById(`mf-${f.key}-label`).value = f.label || "";
+          document.getElementById(`mf-${f.key}-correct`).value = f.correct || "";
+          document.getElementById(`mf-${f.key}-pts`).value = f.points || 1;
+        }
+      });
+    } else if (q.question_type === "multiple_choice" && Array.isArray(q.options)) {
+      document.getElementById("q-options").value = q.options.join("\n");
+      document.getElementById("q-correct").value = q.correct_answer || "";
+      document.getElementById("q-points").value = q.points || 1;
+    } else {
+      document.getElementById("q-correct").value = q.correct_answer || "";
+      document.getElementById("q-points").value = q.points || 1;
+    }
+
+    document.getElementById("question-form-title").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  document.getElementById("cancel-edit-btn").addEventListener("click", cancelEditingQuestion);
+
   document.getElementById("add-question-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!selectedQuizId) return;
@@ -428,19 +500,29 @@
         .filter(Boolean);
     }
 
-    await api(`/api/admin/quizzes/${selectedQuizId}/questions`, {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: document.getElementById("q-prompt").value,
-        question_type: qType,
-        options,
-        correct_answer: correctAnswer,
-        points,
-      }),
-    });
-    e.target.reset();
-    qTypeSelect.value = qType;
-    syncQuestionTypeUI();
+    const payload = {
+      prompt: document.getElementById("q-prompt").value,
+      question_type: qType,
+      options,
+      correct_answer: correctAnswer,
+      points,
+    };
+
+    if (editingQuestionId !== null) {
+      await api(`/api/admin/questions/${editingQuestionId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      cancelEditingQuestion();
+    } else {
+      await api(`/api/admin/quizzes/${selectedQuizId}/questions`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      e.target.reset();
+      qTypeSelect.value = qType;
+      syncQuestionTypeUI();
+    }
     await loadQuestions();
   });
 
