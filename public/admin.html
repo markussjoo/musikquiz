@@ -75,7 +75,21 @@
           <span class="small muted">Dela länk:</span>
           <code id="share-url"></code>
           <button id="copy-link-btn" class="btn btn-secondary btn-sm" type="button">Kopiera</button>
+          <button id="show-qr-btn" class="btn btn-secondary btn-sm" type="button">📱 QR-kod</button>
           <a id="open-link-btn" href="#" target="_blank" class="btn btn-secondary btn-sm">Öppna ↗</a>
+        </div>
+
+        <div id="qr-panel" class="hidden" style="margin-top: 16px; padding: 20px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px; text-align: center;">
+          <h3 id="qr-title" style="margin-bottom: 6px;"></h3>
+          <p class="small muted" style="margin-top: 0; margin-bottom: 14px;">Låt deltagarna scanna QR-koden med mobilkameran</p>
+          <div style="display: inline-block; padding: 12px; background: #fff; border-radius: 12px;">
+            <img id="qr-img" src="" alt="QR-kod för quiz" width="260" height="260" style="display: block;" />
+          </div>
+          <div class="small muted" id="qr-url-label" style="margin-top: 10px; word-break: break-all;"></div>
+          <div class="row" style="justify-content: center; margin-top: 14px;">
+            <a id="qr-download-btn" href="#" download="quiz-qr.png" target="_blank" class="btn btn-primary btn-sm">Ladda ner QR-kod</a>
+            <button id="close-qr-btn" class="btn btn-secondary btn-sm" type="button">Stäng</button>
+          </div>
         </div>
       </div>
 

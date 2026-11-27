@@ -63,6 +63,13 @@
     document.getElementById("open-link-btn").href = url;
     const toggleBtn = document.getElementById("toggle-active-btn");
     toggleBtn.textContent = quiz.is_active ? "Stäng quiz" : "Öppna quiz";
+
+    const qrApi = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&margin=16&data=${encodeURIComponent(url)}`;
+    document.getElementById("qr-title").textContent = quiz.title;
+    document.getElementById("qr-img").src = qrApi;
+    document.getElementById("qr-url-label").textContent = url;
+    document.getElementById("qr-download-btn").href = qrApi;
+    document.getElementById("qr-download-btn").download = `${quiz.slug}-qr.png`;
   }
 
   async function loadQuizzes(preserveId = null) {
@@ -338,6 +345,14 @@
     const btn = document.getElementById("copy-link-btn");
     btn.textContent = "Kopierad!";
     setTimeout(() => (btn.textContent = "Kopiera"), 1500);
+  });
+
+  document.getElementById("show-qr-btn").addEventListener("click", () => {
+    document.getElementById("qr-panel").classList.toggle("hidden");
+  });
+
+  document.getElementById("close-qr-btn").addEventListener("click", () => {
+    document.getElementById("qr-panel").classList.add("hidden");
   });
 
   const qMultifieldsWrap = document.getElementById("q-multifields-wrap");
